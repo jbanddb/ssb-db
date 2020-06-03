@@ -166,6 +166,12 @@ module.exports = function (dirname, keys, opts) {
     return unbox(msg, msgKey, unboxers)
   }
 
+  const _rebuild = db.rebuild
+  db.rebuild = function (cb) {
+    unbox.resetCache()
+    _rebuild(cb)
+  }
+
   /* initialise some state */
   setup.add(done => {
     db.last.get((_, last) => {
