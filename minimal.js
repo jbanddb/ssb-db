@@ -8,7 +8,7 @@ var timestamp = require('monotonic-timestamp')
 var Obv = require('obv')
 var u = require('./util')
 var codec = require('./codec')
-var { box, unbox } = require('./autobox')
+var { box, CachedUnbox } = require('./autobox')
 
 module.exports = function (dirname, keys, opts) {
   var caps = opts && opts.caps || {}
@@ -16,6 +16,7 @@ module.exports = function (dirname, keys, opts) {
 
   var boxers = []
   var unboxers = []
+  var unbox = CachedUnbox()
 
   var log = OffsetLog(path.join(dirname, 'log.offset'), { blockSize: 1024 * 16, codec })
 

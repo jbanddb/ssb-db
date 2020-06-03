@@ -30,23 +30,8 @@ function RecpsError (recps) {
   )
 }
 
-var unboxCache = HLRU(128)
-/* NOTE
- * currently when flumedb passes messages to each view (index) it runs
- * an unbox on encrypted messaged FOR EVERY VIEW
- *
- * This is a temporary easy solution to reduce some wasted CPU cycles
- * without having to change deep things about flumedb
- */
-unbox.resetCache = function () {
-  unboxCache = HLRU(128)
-}
 function unbox (msg, readKey, unboxers) {
   if (!msg || !isString(msg.value.content)) return msg
-
-  const cached = unboxCache.get(msg.key)
-  if (cached === false) return msg
-  else if (cached) return cached
 
   var plain
   for (var i = 0; i < unboxers.length; i++) {
@@ -62,15 +47,8 @@ function unbox (msg, readKey, unboxers) {
     if (plain) break
   }
 
-  if (!plain) {
-    unboxCache.set(msg.key, false)
-    return msg
-  }
-
-  const result = decorate(msg, plain)
-  unboxCache.set(msg.key, result)
-
-  return result
+  if (!plain) return msg
+  return decorate(msg, plain)
 
   function decorate (msg, plain) {
     var value = {}
@@ -100,7 +78,39 @@ function unbox (msg, readKey, unboxers) {
   }
 }
 
+/* NOTE
+ * currently when flumedb passes messages to each view (index) it runs
+ * an unbox on encrypted messaged FOR EVERY VIEW
+ *
+ * This is a temporary easy solution to reduce some wasted CPU cycles
+ * without having to change deep things about flumedb
+ */
+function CachedUnbox () {
+  var cache = HLRU(128)
+
+  function cachedUnbox (msg, readKey, unboxers) {
+    if (!msg || !isString(msg.value.content)) return msg
+
+    const cached = cache.get(msg.key)
+    if (cached === false && !readKey) return msg
+    else if (cached) return cached
+
+    const result = unbox(msg, readKey, unboxers)
+    if (isString(result.value.content)) cache.set(msg.key, false)
+    else cache.set(msg.key, result)
+
+    return result
+  }
+
+  cachedUnbox.resetCache = function () {
+    cache = HLRU(128)
+  }
+
+  return cachedUnbox
+}
+
 module.exports = {
   box,
-  unbox
+  unbox,
+  CachedUnbox
 }
