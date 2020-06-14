@@ -1,11 +1,13 @@
 var create     = require('./create')
 var ssbKeys    = require('ssb-keys')
 var path       = require('path')
-var osenv      = require('osenv')
+var os         = require('os')
 var mkdirp     = require('mkdirp')
 var rimraf     = require('rimraf')
 var valid      = require('./lib/validators')
-var pkg        = require('./package.json')
+var version    = require('./package.json').version
+var help       = require('./help')
+
 const pull = require('pull-stream')
 const pullNotify = require('pull-notify')
 const pullCat = require('pull-cat')
@@ -15,27 +17,28 @@ function isObject(o) { return 'object' === typeof o }
 function isFunction (f) { return 'function' === typeof f }
 
 var manifest = {
-  get: 'async',
+  add: 'async',
   createFeedStream: 'source',
-  createLogStream: 'source',
-  messagesByType: 'source',
   createHistoryStream: 'source',
+  createLogStream: 'source',
+  createSequenceStream: 'source',
   createUserStream: 'source',
   createWriteStream: 'sink',
-  createSequenceStream: 'source',
-  links: 'source',
-  add: 'async',
-  publish: 'async',
+  del: 'async',
+  get: 'async',
   getLatest: 'async',
+  getVectorClock: 'async',
+  help: 'sync',
   latest: 'source',
   latestSequence: 'async',
-  whoami: 'sync',
-  del: 'async',
+  links: 'source',
+  messagesByType: 'source',
   progress: 'sync',
+  publish: 'async',
+  rebuild: 'async',
   status: 'sync',
-  getVectorClock: 'async',
   version: 'sync',
-  help: 'sync',
+  whoami: 'sync',
 }
 
 module.exports = {
@@ -50,7 +53,7 @@ module.exports = {
     // (useful for testing)
     if(opts.temp) {
       var name = isString(opts.temp) ? opts.temp : ''+Date.now()
-      opts.path = path.join(osenv.tmpdir(), name)
+      opts.path = path.join(os.tmpdir(), name)
       rimraf.sync(opts.path)
     }
 
@@ -106,40 +109,21 @@ module.exports = {
     ssb.since(sequenceNotifier)
 
     return self = {
-      id                       : feed.id,
       keys                     : opts.keys,
+      id                       : feed.id,
 
-      ready                    : function () {
-        return ssb.ready.value
+      whoami                   : () => {
+        return { id: feed.id }
       },
-
-      progress                 : function () {
-        return ssb.progress
-      },
-
-      status                   : function () {
+      version                  : () => version,
+      ready                    : () => ssb.ready.value,
+      progress                 : () => ssb.progress,
+      status                   : () => {
         return {
-          progress: self.progress(),
+          progress: ssb.progress,
           db: ssb.status,
           sync: since()
         }
-      },
-
-      version                  : function () {
-        return pkg.version
-      },
-
-      createSequenceStream: () => {
-        // If the initial value is `undefined` we want it to be `-1`.
-        // This is because `-1` is a magic sequence number for an empty log.
-        const initialValue = ssb.since.value !== undefined
-          ? ssb.since.value
-          : -1
-        
-        return pullCat([
-          pull.values([initialValue]),
-          sequenceNotifier.listen()
-        ])
       },
 
       //temporary!
@@ -164,20 +148,32 @@ module.exports = {
       getLatest                : valid.async(ssb.getLatest, 'feedId'),
       latestSequence           : valid.async(ssb.latestSequence, 'feedId'),
       createFeed               : ssb.createFeed,
-      whoami                   : function () { return { id: feed.id } },
       createFeedStream         : valid.source(ssb.createFeedStream, 'readStreamOpts?'),
       createHistoryStream      : valid.source(ssb.createHistoryStream, ['createHistoryStreamOpts'], ['feedId', 'number?', 'boolean?']),
       createLogStream          : valid.source(ssb.createLogStream, 'readStreamOpts?'),
       createUserStream         : valid.source(ssb.createUserStream, 'createUserStreamOpts'),
+      createSequenceStream     : () => {
+        // If the initial value is `undefined` we want it to be `-1`.
+        // This is because `-1` is a magic sequence number for an empty log.
+        const initialValue = ssb.since.value !== undefined
+          ? ssb.since.value
+          : -1
+
+        return pullCat([
+          pull.values([initialValue]),
+          sequenceNotifier.listen()
+        ])
+      },
       links                    : valid.source(ssb.links, 'linksOpts'),
-      sublevel                 : ssb.sublevel,
+      // sublevel                 : ssb.sublevel, // Disabled as does not appear to be used
       messagesByType           : valid.source(ssb.messagesByType, 'string|messagesByTypeOpts'),
       createWriteStream        : ssb.createWriteStream,
       getVectorClock           : ssb.getVectorClock,
       getAtSequence            : ssb.getAtSequence,
       addBoxer                 : ssb.addBoxer,
       addUnboxer               : ssb.addUnboxer,
-      help                     : function () { return require('./help') }
+      rebuild                  : ssb.rebuild,
+      help                     : () => help
     }
   }
 }

@@ -6,19 +6,23 @@ var AsyncWrite = require('async-write')
 var V = require('ssb-validate')
 var timestamp = require('monotonic-timestamp')
 var Obv = require('obv')
+var mkdirp = require('mkdirp')
+
 var u = require('./util')
 var codec = require('./codec')
-var { box, CachedUnbox } = require('./autobox')
+var auto = require('./autobox')
+var box = auto.box
+var unbox = auto.unbox.withCache()
 
 module.exports = function (dirname, keys, opts) {
   var caps = opts && opts.caps || {}
   var hmacKey = caps.sign
 
+  mkdirp.sync(dirname)
+  var log = OffsetLog(path.join(dirname, 'log.offset'), { blockSize: 1024 * 16, codec })
+
   var boxers = []
   var unboxers = []
-  var unbox = CachedUnbox()
-
-  var log = OffsetLog(path.join(dirname, 'log.offset'), { blockSize: 1024 * 16, codec })
 
   const unboxerMap = wait((msg, cb) => {
     try {
