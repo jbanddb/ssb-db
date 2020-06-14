@@ -85,8 +85,9 @@ function unbox (msg, readKey, unboxers) {
  * This is a temporary easy solution to reduce some wasted CPU cycles
  * without having to change deep things about flumedb
  */
-function unboxWithCache () {
+function unboxWithCache (id) {
   var cache = HLRU(128)
+  // console.log('instantiating unbox.withCache', id)
 
   function cachedUnbox (msg, readKey, unboxers) {
     if (!msg || !isString(msg.value.content)) return msg

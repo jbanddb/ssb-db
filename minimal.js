@@ -12,17 +12,20 @@ var u = require('./util')
 var codec = require('./codec')
 var auto = require('./autobox')
 var box = auto.box
-var unbox = auto.unbox.withCache()
 
 module.exports = function (dirname, keys, opts) {
   var caps = opts && opts.caps || {}
   var hmacKey = caps.sign
+
 
   mkdirp.sync(dirname)
   var log = OffsetLog(path.join(dirname, 'log.offset'), { blockSize: 1024 * 16, codec })
 
   var boxers = []
   var unboxers = []
+  var unbox = auto.unbox.withCache()
+  // NOTE unbox.withCache needs to be instantiated *inside* this scope
+  // otherwise the cache is shared across instances!
 
   const unboxerMap = wait((msg, cb) => {
     try {
